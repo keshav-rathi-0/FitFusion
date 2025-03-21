@@ -1,45 +1,61 @@
 <?php
 session_start();
+include 'db_config.php';
 
-// Handle cart actions
-if (isset($_GET['action']) && isset($_GET['id'])) {
-    $productId = $_GET['id'];
-    
-    switch ($_GET['action']) {
-        case 'add':
-            if (!in_array($productId, $_SESSION['cart'] ?? [])) {
-                $_SESSION['cart'][] = $productId;
-            }
-            break;
-        case 'remove':
-            $_SESSION['cart'] = array_diff($_SESSION['cart'], [$productId]);
-            break;
+// Fetch cart items from session
+$cart = $_SESSION['cart'] ?? [];
+
+// Fetch product details from the database
+$cartItems = [];
+$total = 0;
+
+if (!empty($cart)) {
+    $placeholders = implode(',', array_fill(0, count($cart), '?'));
+    $stmt = $pdo->prepare("SELECT * FROM products WHERE id IN ($placeholders)");
+    $stmt->execute(array_keys($cart));
+    $cartItems = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Calculate total price
+    foreach ($cartItems as $item) {
+        $total += $item['price'] * $cart[$item['id']];
     }
 }
-
-require_once 'includes/db.php';
-require_once 'includes/functions.php';
 ?>
 
-<?php include 'includes/header.php'; ?>
-
-<main class="container">
-    <h1>Shopping Cart</h1>
-    
-    <?php if (!empty($_SESSION['cart'])): ?>
-        <?php foreach ($_SESSION['cart'] as $productId): ?>
-            <?php $product = getProductById($conn, $productId); ?>
-            <div class="cart-item">
-                <img src="images/<?= $product['image'] ?>" alt="<?= $product['name'] ?>">
-                <h3><?= $product['name'] ?></h3>
-                <p>$<?= $product['price'] ?></p>
-                <a href="cart.php?action=remove&id=<?= $productId ?>">Remove</a>
-            </div>
-        <?php endforeach; ?>
-        <a href="checkout.php" class="checkout-button">Proceed to Checkout</a>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cart - FitFusion</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <h1>Your Cart</h1>
+    <?php if (!empty($cartItems)): ?>
+        <table>
+            <tr>
+                <th>Product</th>
+                <th>Price</th>
+                <th>Quantity</th>
+                <th>Total</th>
+                <th>Action</th>
+            </tr>
+            <?php foreach ($cartItems as $item): ?>
+                <tr>
+                    <td><?php echo htmlspecialchars($item['name']); ?></td>
+                    <td>$<?php echo number_format($item['price'], 2); ?></td>
+                    <td><?php echo $cart[$item['id']]; ?></td>
+                    <td>$<?php echo number_format($item['price'] * $cart[$item['id']], 2); ?></td>
+                    <td>
+                        <a href="cart_actions.php?action=remove&id=<?php echo $item['id']; ?>" class="btn btn-danger">Remove</a>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+        </table>
+        <p><strong>Total:</strong> $<?php echo number_format($total, 2); ?></p>
     <?php else: ?>
-        <p>Your cart is empty</p>
+        <p>Your cart is empty.</p>
     <?php endif; ?>
-</main>
-
-<?php include 'includes/footer.php'; ?>
+</body>
+</html>
